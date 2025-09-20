@@ -1,8 +1,6 @@
 import discord
 from discord import app_commands
 import pandas as pd
-import os
-import asyncio
 import json
 import datetime
 from discord.ext import tasks
@@ -25,7 +23,6 @@ tree = app_commands.CommandTree(bot)
 
 colles = {}
 groups = []
-group = {}
 
 def semaine_S():
     """Donne le dictionnaire de correspondance sur le colomètre ou None si elle n'y est pas"""
@@ -50,7 +47,12 @@ def semaine_S():
 
 S_ = semaine_S()
 
-def semaine_actuelle(): #Renvoie le numéro de semaine du collomètre (Il n'y a pas de saut pour les vacances alors c'est galère)
+def semaine_actuelle(): 
+    """Fonction renvoyant le numéro de la semaine de travail
+
+    >>> semaine_actuelle()
+    3
+    """
     return S_[datetime.date.today().isocalendar()[1]]
 
 
@@ -66,19 +68,18 @@ day_to_num = {
 
 
 def get_kholles():
+    """Func that reads the collomètre and returns a tuple of (group, colles)
+    TODO Make it also tell which group as what half group classes
+    """
     df1 = pd.read_excel("collomètre.xlsx", sheet_name=0)
     data_colles = df1.to_dict(orient="records")
 
     df2 = pd.read_excel("collomètre.xlsx", sheet_name=1)
     data_groups = df2.to_dict(orient="records")
 
-    global colles, groups
-    colles = {}
-    groups = []
-
     current_matiere = None
 
-    # Traiter les colles (de df1)
+    # Use the first page to get the colles
     for row in data_colles:
         if pd.notna(row['Matière']) and pd.isna(row['Colleur']):
             # Ignore the half-class groups
@@ -114,7 +115,7 @@ def get_kholles():
                         "semaine": semaine_from_key
                     })
 
-    # Traiter les groupes (de df2)
+    # Use the second page to get the groups
     for row in data_groups[2:]:
         if pd.notna(row['Unnamed: 0']):
             group_a = {
@@ -139,6 +140,9 @@ def get_kholles():
 
 
 def kholles_semaines(user_id: int, semaine: int = None) -> dict:
+    """
+    Sends the week's colles for a user_id
+    If semaine is not given use the current week"""
     user_data = data["Members"][str(user_id)]
     user_group_id = user_data["group_id"]
 
@@ -153,9 +157,8 @@ def kholles_semaines(user_id: int, semaine: int = None) -> dict:
 @bot.event
 async def on_ready():
     get_kholles()
-    bot.add_view(Select_group())
-    # send_dm.start()
-    # send_dm_reminder.start()
+    await send_reminder_saturday()
+    await send_reminder_2days_before()
     print(f'We have logged in as {bot.user}')
     await tree.sync(guild=None)
 
@@ -196,11 +199,8 @@ async def connect(interaction: discord.Integration):
 
 @tree.command(name="mescolles", description="Affiche tes colles prévues pour cette semaine")
 async def colles_cmd(interaction: discord.Integration):
-    member = None
-    for m in data["Members"]:
-        if m == str(interaction.user.id):
-            member = m
-            break
+    member = data["Members"].get(str(interaction.user.id))
+
     if not member:
         embed = discord.Embed(
             title="Erreur",
@@ -290,7 +290,10 @@ class select_week(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=view)
 
     @discord.ui.button(label="Semaine suivante", style=discord.ButtonStyle.success, emoji="➡️")
-    async def first_button_callback(self, interaction, button):
+    async def next_week_button_callback(self, interaction, button):
+        """
+        Button handler to show next week colles
+        """
         self.semaine += 1
 
         try:
@@ -327,53 +330,58 @@ class select_week(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=view)
 
 
-# @tasks.loop(hours=168)
-# async def send_dm():
-#     for member in data["Members"]:
-#         for kholle in colles[f"S_{semaine_actuelle()}"]:
-#             if kholle["group_id"] == data["Members"][str(member)]["group_id"]:
-#                 user = await bot.fetch_user(data["Members"][member]["discord_id"])
-#                 embed = discord.Embed(
-#                     title="Rappel de ta khôlle",
-#                     description=f"Tu as une khôlle de {kholle['matiere']} avec {kholle['colleur']} le {kholle['jour']} à {kholle['heure']}.",
-#                     colour=discord.Colour.purple()
-#                 )
-#                 embed.set_footer(text="MP2I >>>> MPSI")
-#                 embed.set_thumbnail(
-#                     url="https://cdn.discordapp.com/icons/883070060070064148/c1880648a1ab2805d254c47a14e9053c.png?size=256&amp;aquality=lossless")
+async def send_reminder_saturday():
+    # Send a remainder every saturday for next week colles
+    if not (datetime.date.today().timetuple().tm_wday == 5):
+        return
+    for member in data["Members"]:
+        if data["Members"][member]["reminder"] != "True":
+            return
+        user = await bot.fetch_user(member)
+        user_colles = kholles_semaines(member, semaine_actuelle()+1)
 
-#                 await user.send(embed=embed)
+        embed = discord.Embed(
+            title=f"Tes colles pour la semaine",
+            description=f"Voici les colles que tu as pour la S_{semaine_actuelle()+1} (Semaine {semaine_actuelle() + 39}) : ",
+            colour=discord.Colour.purple()
+        )
+        for kholle in user_colles:
+            embed.add_field(
+                name=f"{kholle['matiere']} avec {kholle['colleur']}",
+                value=f"```\nLe {kholle['jour']} à {kholle['heure']}```",
+            )
+        embed.set_footer(text="MP2I >>>> MPSI")
+        embed.set_thumbnail(
+            url="https://cdn.discordapp.com/icons/883070060070064148/c1880648a1ab2805d254c47a14e9053c.png?size=256&amp;aquality=lossless")
+
+        # To send dms, the app needs to be a bot, not just an app.
+        await user.send(embed=embed)
 
 
-# @send_dm.before_loop
-# async def before():
-#     await bot.wait_until_ready()
-#     next_run = datetime.datetime.combine(
-#         datetime.date.today() + datetime.timedelta((3 - datetime.date.today().weekday()) % 7),
-#         datetime.time(8, 0)
-#     )
-#     await asyncio.sleep((next_run - datetime.datetime.now()).total_seconds())
+async def send_reminder_2days_before():
+    for member in data["Members"]:
+        if data["Members"][member]["reminder"] != "True":
+            return
+        user = await bot.fetch_user(member)
+        user_colles = kholles_semaines(member, semaine_actuelle()+1)
 
+        embed = discord.Embed(
+            title=f"Rappel de ta colle",
+            description=f"Voici la colle que tu as pour dans deux jours, prépare la bien ! : ",
+            colour=discord.Colour.red()
+        )
+        for kholle in user_colles:
+            if day_to_num[kholle['jour']] - datetime.date.today().timetuple().tm_wday == 2:
+                embed.add_field(
+                    name=f"{kholle['matiere']} avec {kholle['colleur']}",
+                    value=f"```\nLe {kholle['jour']} à {kholle['heure']}```",
+                )
+        embed.set_footer(text="MP2I >>>> MPSI")
+        embed.set_thumbnail(
+            url="https://cdn.discordapp.com/icons/883070060070064148/c1880648a1ab2805d254c47a14e9053c.png?size=256&amp;aquality=lossless")
 
-# @tasks.loop(hours=72)
-# async def send_dm_reminder():
-#     for member in data["Members"]:
-#         for kholle in colles[f"S_{semaine_actuelle()}"]:
-#             if kholle["group_id"] == data["Members"][member]["group_id"] and kholle["semaine"] == semaine_actuelle():
-#                 if datetime.datetime.now().weekday() != day_to_num[kholle["jour"]]-3:
-#                     continue
-#                 if not data["Members"][member].get("reminder", True):
-#                     continue
-#                 user = await bot.fetch_user(data["Members"][member]["discord_id"])
-#                 embed = discord.Embed(
-#                     title="Rappel de ta khôlle dans 3 jours",
-#                     description=f"Tu as une khôlle de {kholle['matiere']} avec {kholle['colleur']} le {kholle['jour']} à {kholle['heure']}.",
-#                     colour=discord.Colour.purple()
-#                 )
-#                 embed.set_footer(text="MP2I >>>> MPSI")
-#                 embed.set_thumbnail(
-#                     url="https://cdn.discordapp.com/icons/883070060070064148/c1880648a1ab2805d254c47a14e9053c.png?size=256&amp;aquality=lossless")
-#                 await user.send(embed=embed)
+        # To send dms, the app needs to be a bot, not just an app.
+        await user.send(embed=embed)
 
 
 class Select_group(discord.ui.View):
