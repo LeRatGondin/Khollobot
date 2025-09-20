@@ -23,8 +23,8 @@ groups = []
 group = {}
 
 
-def semaine_actuelle():
-    return abs(datetime.date.today().isocalendar()[1] - 38)
+def semaine_actuelle(): #Renvoie le numéro de semaine du collomètre (Il n'y a pas de saut pour les vacances alors c'est galère)
+    return [38,39,40,41,42,45,46,47,48,49,50,51,2,3,4,5].index(datetime.date.today().isocalendar()[1])
 
 
 day_to_num = {
@@ -204,7 +204,7 @@ async def colles_cmd(interaction: discord.Integration):
 
     embed = discord.Embed(
         title=f"Tes colles pour la semaine",
-        description=f"Voici les colles que tu as pour la S_{semaine_actuelle()} (Semaine {semaine_actuelle() + 38}) : ",
+        description=f"Voici les colles que tu as pour la S_{semaine_actuelle()} (Semaine {datetime.date.today().isocalendar()[1]} de l'année) : ",
         colour=discord.Colour.purple()
     )
     for kholle in user_colles:
