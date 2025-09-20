@@ -4,16 +4,48 @@ import pandas as pd
 import json
 import datetime
 from discord.ext import tasks
-
+from ics import Calendar, Event
 
 with open("data.json", "r") as f:
     data = json.load(f)
 
+with open("config.json") as f:
+    config = json.load(f)
+
+with open("Zone-B.ics", 'r') as f:
+    zoneB = Calendar(f.read())
+
 bot = discord.Client(intents=discord.Intents.all())
 tree = app_commands.CommandTree(bot)
 
+groups = {}
 colles = {}
-groups = []
+S_ = {}
+
+
+def semaine_S():
+    """Donne le dictionnaire de correspondance sur le colomètre ou None si elle n'y est pas"""
+    holidays = []
+
+    # Année de début de la periode scolaire, à changer chaque année
+    year = config["CurrentYear"]
+    for event in zoneB.events:
+        date = event.begin.datetime.replace(tzinfo=None)
+        if ("Vacances" in event.name) and (datetime.datetime(year, 9, 1) <= date < datetime.datetime(year + 1, 8, 25)):
+            # La 1ere semaine de chaque vacance (+1 parce que le début c'est le vendredi) (+1 parce que ce module de ### commence l'année à la semaine 0)
+            holidays.append(int(event.begin.datetime.strftime('%W'))+2)
+            holidays.append(int(event.end.datetime.strftime('%W')))
+    # Semaine de début des colles, à changer chaque semestre
+    week = config["FirstColleWeek"]
+    nb = 0
+    print(holidays)
+    while nb <= 15:  # Nombre de semaine de colles
+        if not ((week) in holidays):
+            S_[week] = nb
+            nb += 1
+        week += 1
+        if week > int(datetime.datetime(year, 12, 31).strftime('%W')):
+            week = 1
 
 
 def semaine_actuelle():
@@ -22,7 +54,7 @@ def semaine_actuelle():
     >>> semaine_actuelle()
     3
     """
-    return abs(datetime.date.today().isocalendar()[1] - 38)
+    return S_[datetime.date.today().isocalendar()[1]]
 
 
 day_to_num = {
@@ -200,7 +232,7 @@ async def colles_cmd(interaction: discord.Integration):
 
     embed = discord.Embed(
         title=f"Tes colles pour la semaine",
-        description=f"Voici les colles que tu as pour la S_{semaine_actuelle()} (Semaine {semaine_actuelle() + 38}) : ",
+        description=f"Voici les colles que tu as pour la S_{semaine_actuelle()} (Semaine {datetime.date.today().isocalendar()[1]} de l'année) : ",
         colour=discord.Colour.purple()
     )
     for kholle in user_colles:
