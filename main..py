@@ -22,6 +22,7 @@ groups = []
 colles = {}
 semaine_collometre = {}
 
+
 def semaine_S():
     """Donne le dictionnaire de correspondance sur le colomètre ou None si elle n'y est pas"""
     holidays = []
@@ -44,7 +45,7 @@ def semaine_S():
         week += 1
         if week > int(datetime.datetime(year, 12, 31).strftime('%W')):
             week = 1
-semaine_S()
+
 
 def semaine_actuelle():
     """Fonction renvoyant le numéro de la semaine de travail, ou la prochaine il n'y a pas cours cette semaine
@@ -157,6 +158,7 @@ def kholles_semaines(user_id: int, semaine: int = None) -> dict:
 @bot.event
 async def on_ready():
     get_kholles()
+    semaine_S()
     await send_reminder_saturday()
     await send_reminder_2days_before()
     print(f'We have logged in as {bot.user}')
@@ -379,7 +381,8 @@ async def send_reminder_2days_before():
         embed.set_footer(text="MP2I >>>> MPSI")
         embed.set_thumbnail(
             url="https://cdn.discordapp.com/icons/883070060070064148/c1880648a1ab2805d254c47a14e9053c.png?size=256&amp;aquality=lossless")
-
+        if embed.fields == []:
+            continue
         # To send dms, the app needs to be a bot, not just an app.
         await user.send(embed=embed)
 
