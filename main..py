@@ -6,14 +6,11 @@ import datetime
 from discord.ext import tasks
 from ics import Calendar, Event
 
-
-global colles
-global groups
-global data
-global S_
-
 with open("data.json", "r") as f:
     data = json.load(f)
+
+with open("config.json") as f:
+    config = json.load(f)
 
 with open("Zone-B.ics", 'r') as f:
     zoneB = Calendar(f.read())
@@ -21,33 +18,37 @@ with open("Zone-B.ics", 'r') as f:
 bot = discord.Client(intents=discord.Intents.all())
 tree = app_commands.CommandTree(bot)
 
+groups = {}
 colles = {}
-groups = []
+S_ = {}
+
 
 def semaine_S():
     """Donne le dictionnaire de correspondance sur le colomètre ou None si elle n'y est pas"""
     holidays = []
 
-    year = 2025 #Année de début de la periode scolaire, à changer chaque année
+    # Année de début de la periode scolaire, à changer chaque année
+    year = config["CurrentYear"]
     for event in zoneB.events:
         date = event.begin.datetime.replace(tzinfo=None)
         if ("Vacances" in event.name) and (datetime.datetime(year, 9, 1) <= date < datetime.datetime(year + 1, 8, 25)):
-            holidays.append(int(event.begin.datetime.strftime('%W'))+2) #La 1ere semaine de chaque vacance (+1 parce que le début c'est le vendredi) (+1 parce que ce module de ### commence l'année à la semaine 0)
+            # La 1ere semaine de chaque vacance (+1 parce que le début c'est le vendredi) (+1 parce que ce module de ### commence l'année à la semaine 0)
+            holidays.append(int(event.begin.datetime.strftime('%W'))+2)
             holidays.append(int(event.end.datetime.strftime('%W')))
-    week = int(datetime.datetime(2025, 9, 15).strftime('%W')) + 1 #Semaine de début des colles, à changer chaque semestre
+    # Semaine de début des colles, à changer chaque semestre
+    week = config["FirstColleWeek"]
     nb = 0
     print(holidays)
-    while nb <= 15 : #Nombre de semaine de colles
+    while nb <= 15:  # Nombre de semaine de colles
         if not ((week) in holidays):
             S_[week] = nb
             nb += 1
-        week += 1 
-        if week > int(datetime.datetime(year, 12, 31).strftime('%W')) :
+        week += 1
+        if week > int(datetime.datetime(year, 12, 31).strftime('%W')):
             week = 1
 
-S_ = semaine_S()
 
-def semaine_actuelle(): 
+def semaine_actuelle():
     """Fonction renvoyant le numéro de la semaine de travail
 
     >>> semaine_actuelle()
