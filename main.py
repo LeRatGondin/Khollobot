@@ -259,6 +259,71 @@ async def khôlles_cmd(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed, ephemeral=True, view=select_week())
 
+@tree.command(name="calendrier", description="Créer un fichier ICS de tes colles")
+async def calendar_cmd(interaction: discord.Integration):
+    member = data["Members"].get(str(interaction.user.id))
+
+    if not member:
+        embed = discord.Embed(
+            title="Erreur",
+            description="Tu n'as pas encore relié ton compte Discord, ou n'as pas fini ta connexion. Utilise la commande /connection.",
+            colour=discord.Colour.purple()
+        )
+        embed.set_footer(text="MP2I >>>> MPSI")
+        embed.set_thumbnail(
+            url=url)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+
+    calendrier = Calendar()
+    for week in semaine_collometre:
+        user_colles = kholles_semaines(interaction.user.id, week)
+        if not user_colles:
+            continue
+        for kholle in user_colles:
+            colle = Event()
+            colle.name = f"Khôlle de {kholle["matiere"]}"
+            colle.description = kholle["colleur"]
+            colle.location = kholle["salle"]
+
+            #Calcul de la date de la colle
+            if semaine_collometre[kholle["semaine"]] < 33:
+                year = config["CurrentYear"]
+            else :
+                year = config["CurrentYear"] + 1
+            year_start = datetime.datetime(year, 1, 1)
+            #Premier jour de l'année + n° du jour de la colle - n° Jour de l'année + N° de la semaine de la colle -1 (on sait pas pourquoi -1, mais ça marche)
+            date = year_start + datetime.timedelta(days=day_to_num[kholle["jour"]] - year_start.weekday(), weeks=semaine_collometre[kholle["semaine"]]-1) 
+
+            if "-" in kholle["heure"] :
+                start, end = kholle["heure"].split("-")
+                s_h, s_min = map(int, start.split("h"))
+                e_h, e_min = map(int, end.split("h"))
+                colle.begin = date + timedelta(hours=s_h, minutes=s_min)
+                colle.end = date + timedelta(hours=e_h, minutes=e_min)
+            else :
+                s_h, s_min = map(int, kholle["heure"].split("h"))
+                colle.begin = date + timedelta(hours=s_h, minutes=s_min)
+                colle.end = colle.begin + timedelta(minutes=55)
+            calendrier.events.add(colle)
+
+    ics_content = str(calendrier)
+
+    embed = discord.Embed(
+        title="Ton Calendrier ICS",
+        description="Voici le fichier que tu pourras importer sur la plupart des applications de planification.",
+        colour=discord.Colour.blue()
+    )
+    embed.add_field(
+        name="Fichier ICS",
+        value= "" #trouver comment mettre le ics dans un message
+        )
+    embed.set_footer(text="MP2I >>>> MPSI")
+    embed.set_thumbnail(
+        url=url)
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 class select_week(discord.ui.View):
 
