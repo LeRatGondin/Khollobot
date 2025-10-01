@@ -309,9 +309,13 @@ async def calendar_cmd(interaction: discord.Integration):
             #Premier jour de l'année + n° du jour de la colle - n° Jour de l'année + N° de la semaine de la colle -1 (on sait pas pourquoi -1, mais ça marche)
             date = year_start + datetime.timedelta(days=day_to_num[kholle["jour"]] - year_start.weekday(), weeks=semaine_collometre[kholle["semaine"]]-1) 
 
-            start, end = kholle["heure"].split("-")
-            s_h, s_min = map(int, start.split("h"))
-            e_h, e_min = map(int, end.split("h"))
+            if "-" in kholle["heure"]:
+                start, end = kholle["heure"].split("-")
+                s_h, s_min = map(int, start.split("h"))
+                e_h, e_min = map(int, end.split("h"))
+            else :
+                s_h, s_min = map(int, kholle.split("h"))
+                e_h, e_min = s_h + 1, s_min - 5
             colle.begin = date + timedelta(hours=s_h, minutes=s_min)
             colle.end = date + timedelta(hours=e_h, minutes=e_min)
 
