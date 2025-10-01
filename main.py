@@ -3,7 +3,11 @@ from discord import app_commands
 import pandas as pd
 import json
 import datetime
-from ics import Calendar
+from datetime import timedelta
+import pytz
+from discord.ext import tasks
+from ics import Calendar, Event
+import io
 import os
 
 with open("data.json", "r") as f:
@@ -125,7 +129,8 @@ def get_kholles():
                         "colleur": colleur,
                         "jour": jour,
                         "heure": heure,
-                        "semaine": semaine_from_key
+                        "semaine": semaine_from_key,
+                        "salle": salle
                     })
 
     # Use the second page to get the groups
@@ -267,6 +272,70 @@ async def khôlles_cmd(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed, ephemeral=True, view=select_week())
 
+@tree.command(name="calendrier", description="Créer un fichier ICS de tes colles")
+async def calendar_cmd(interaction: discord.Integration):
+    member = data["Members"].get(str(interaction.user.id))
+
+    if not member:
+        embed = discord.Embed(
+            title="Erreur",
+            description="Tu n'as pas encore relié ton compte Discord, ou n'as pas fini ta connexion. Utilise la commande /connection.",
+            colour=discord.Colour.purple()
+        )
+        embed.set_footer(text="MP2I >>>> MPSI")
+        embed.set_thumbnail(
+            url=url)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+
+    calendrier = Calendar()
+    for week in semaine_collometre:
+        user_colles = kholles_semaines(interaction.user.id, week)
+        if not user_colles:
+            continue
+        for kholle in user_colles:
+            colle = Event()
+            colle.name = f"Khôlle de {kholle["matiere"]}"
+            colle.description = kholle["colleur"]
+            colle.location = kholle["salle"]
+
+            #Calcul de la date de la colle
+            if semaine_collometre[kholle["semaine"]] > 33:
+                year = config["CurrentYear"]
+            else :
+                year = config["CurrentYear"] + 1
+            year_start = datetime.datetime(year, 1, 1, tzinfo=pytz.timezone('Europe/Paris'))
+            #Premier jour de l'année + n° du jour de la colle - n° Jour de l'année + N° de la semaine de la colle -1 (on sait pas pourquoi -1, mais ça marche)
+            date = year_start + datetime.timedelta(days=day_to_num[kholle["jour"]] - year_start.weekday(), weeks=semaine_collometre[kholle["semaine"]]-1) 
+
+            start, end = kholle["heure"].split("-")
+            s_h, s_min = map(int, start.split("h"))
+            e_h, e_min = map(int, end.split("h"))
+            colle.begin = date + timedelta(hours=s_h, minutes=s_min)
+            colle.end = date + timedelta(hours=e_h, minutes=e_min)
+
+            calendrier.events.add(colle)
+
+    buffer = io.BytesIO()
+    buffer.write(str(calendrier).encode("utf8"))
+    buffer.seek(0)
+    fichier_ics = discord.File(fp=buffer, filename=f"calendrier_{member["name"].split(" ")[1]}.txt")
+
+    embed = discord.Embed(
+        title="Ton Calendrier ICS",
+        description="Voici le fichier que tu pourras importer sur la plupart des applications de planification.",
+        colour=discord.Colour.blue()
+    )
+    embed.add_field(
+        name="Fichier ICS",
+        value="Voici ton calendrier",
+        )
+    embed.set_footer(text="MP2I >>>> MPSI")
+    embed.set_thumbnail(
+        url=url)
+
+    await interaction.response.send_message(embed=embed, file=fichier_ics, ephemeral=True)
 
 class select_week(discord.ui.View):
 
