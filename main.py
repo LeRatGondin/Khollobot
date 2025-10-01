@@ -8,6 +8,7 @@ import pytz
 from discord.ext import tasks
 from ics import Calendar, Event
 import io
+import os
 
 with open("data.json", "r") as f:
     data = json.load(f)
@@ -81,6 +82,10 @@ def get_kholles():
     """Func that reads the collomètre and returns a tuple of (group, khôlles)
     TODO Make it also tell which group as what half group classes
     """
+    if not ("collomètre.xlsx" in os.listdir()):
+        print("Vous devez ajouter le fichier collomètre et le renommer en \"collomètre.xlsx\", sinon le bot ne pourra pas marcher !!")
+        exit()
+
     df1 = pd.read_excel("collomètre.xlsx", sheet_name=0)
     data_khôlles = df1.to_dict(orient="records")
     
@@ -166,7 +171,8 @@ def kholles_semaines(user_id: int, semaine: int = semaine_actuelle()) -> list:
     user_khôlles = sorted(user_khôlles, key=lambda x: day_to_num[x["jour"]])
     return user_khôlles
 
-async def gen_kholle(user_khôlles, user_id:int, semaine: int = semaine_actuelle()):
+async def gen_kholle(user_id:int, semaine: int = semaine_actuelle()):
+    user_khôlles = kholles_semaines(user_id,semaine)
     if not user_khôlles:
         embed = discord.Embed(
             title="Aucune khôlle cette semaine",
@@ -190,12 +196,12 @@ async def gen_kholle(user_khôlles, user_id:int, semaine: int = semaine_actuelle
         if 'Français-Philosophie' in kholle["matiere"]:
             kholle["matiere"] = 'Francais-Philosophie'
         if "Maths" in kholle["matiere"]:
-            kholle_info = "**\n[Programme de khôlle de maths](https://cahier-de-prepa.fr/mp2i-thiers/docs?rep=331)**"
+            kholle_info = "**\n[Programme de khôlle de maths                  ](https://cahier-de-prepa.fr/mp2i-thiers/docs?rep=331)**"
         if "Physique" in kholle["matiere"]:
             kholle_info = "**\n[Programme de khôlle de physique](https://cahier-de-prepa.fr/mp2i-thiers/docs?rep=329)**"
         embed.add_field(
             name=f"{kholle['matiere']} avec {kholle['colleur']}",
-            value=f"```\nLe {kholle['jour']} à {kholle['heure']}```{kholle_info}",
+            value=f"```\nLe {kholle['jour']} à {kholle['heure']}.\n" +  (f"En salle : {kholle['salle']}\n" if kholle['salle'] else "") + "```" + kholle_info,
         )
     return embed
 
@@ -260,7 +266,9 @@ async def khôlles_cmd(interaction: discord.Interaction):
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
-    embed = await gen_kholle(kholles_semaines(interaction.user.id), user_id = interaction.user.id)
+        
+
+    embed = await gen_kholle(user_id = interaction.user.id, semaine=semaine_actuelle())
 
     await interaction.response.send_message(embed=embed, ephemeral=True, view=select_week())
 
@@ -352,10 +360,8 @@ class select_week(discord.ui.View):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
-        user_khôlles = kholles_semaines(
-            interaction.user.id, semaine=self.semaine)
 
-        embed = gen_kholle(user_khôlles, semaine=self.semaine, user_id = interaction.user.id)
+        embed = await gen_kholle(semaine=self.semaine, user_id = interaction.user.id)
         view = select_week()
         view.semaine = self.semaine
         await interaction.response.edit_message(embed=embed, view=view)
@@ -366,10 +372,7 @@ class select_week(discord.ui.View):
         Button handler to show next week khôlles
         """
         self.semaine += 1
-
-        user_khôlles = kholles_semaines(
-            interaction.user.id, semaine=self.semaine)
-        embed = await gen_kholle(user_khôlles, semaine=self.semaine, user_id = interaction.user.id)
+        embed = await gen_kholle(semaine=self.semaine, user_id = interaction.user.id)
         view = select_week()
         view.semaine = self.semaine
         await interaction.response.edit_message(embed=embed, view=view)
@@ -377,15 +380,14 @@ class select_week(discord.ui.View):
 
 async def send_reminder_saturday():
     # Send a remainder every saturday for next week khôlles
-    if not (datetime.date.today().timetuple().tm_wday == 5):
-        return
+    # if not (datetime.date.today().timetuple().tm_wday == 5):
+    #     return
     for member in data["Members"]:
         if data["Members"][member]["reminder"] != "True":
             return
         user = await bot.fetch_user(member)
-        user_khôlles = kholles_semaines(member, semaine_actuelle()+1)
 
-        embed = await gen_kholle(user_khôlles, semaine_actuelle()+1)
+        embed = await gen_kholle(user_id = member, semaine=semaine_actuelle()+1,)
 
         # To send dms, the app needs to be a bot, not just an app.
         await user.send(embed=embed)
@@ -396,15 +398,21 @@ async def send_reminder_2days_before():
         if data["Members"][member]["reminder"] != "True":
             return
         user = await bot.fetch_user(member)
-        user_khôlles = kholles_semaines(member, semaine_actuelle()+1)
-
+        today = datetime.date.today().timetuple().tm_wday
+        if today in [5,6]: # If were on saturday or sunday, consider next week
+            user_khôlles = kholles_semaines(member, semaine_actuelle()+1)
+        else:
+            user_khôlles = kholles_semaines(member, semaine_actuelle())
         embed = discord.Embed(
             title=f"Rappel de ta khôlle",
             description=f"Salut {data["Members"][member]["name"].split(" ")[1]}, voici la khôlle que tu as pour après demain, prépare la bien ! : ",
             colour=discord.Colour.red()
         )
         for kholle in user_khôlles:
-            if day_to_num[kholle['jour']] - datetime.date.today().timetuple().tm_wday == 2:
+            weekend_condition = None
+            if today in (5,6): # Weekend
+                weekend_condition = day_to_num[kholle['jour']] - today == -5
+            if day_to_num[kholle['jour']] - today == 2 or weekend_condition:
                 embed.add_field(
                     name=f"{kholle['matiere']} avec {kholle['colleur']}",
                     value=f"```\nLe {kholle['jour']} à {kholle['heure']}```",
