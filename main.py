@@ -3,8 +3,11 @@ from discord import app_commands
 import pandas as pd
 import json
 import datetime
+from datetime import timedelta
+import pytz
 from discord.ext import tasks
 from ics import Calendar, Event
+import io
 
 with open("data.json", "r") as f:
     data = json.load(f)
@@ -101,6 +104,7 @@ def get_kholles():
             colleur = row['Colleur']
             jour = row['Jour'] if pd.notna(row['Jour']) else None
             heure = row['Heure'] if pd.notna(row['Heure']) else None
+            salle = row['Salle'] if pd.notna(row['Salle']) else None
 
             for semaine in range(16):
                 col_name = f'S{semaine}'
@@ -120,7 +124,8 @@ def get_kholles():
                         "colleur": colleur,
                         "jour": jour,
                         "heure": heure,
-                        "semaine": semaine_from_key
+                        "semaine": semaine_from_key,
+                        "salle": salle
                     })
 
     # Use the second page to get the groups
@@ -155,7 +160,7 @@ def kholles_semaines(user_id: int, semaine: int = semaine_actuelle()) -> list:
     user_group_id = user_data["group_id"]
 
     user_khôlles = []
-    for kholle in khôlles[f"S_{semaine_actuelle() if not semaine else semaine}"]:
+    for kholle in khôlles[f"S_{semaine}"]:
         if kholle["group_id"] == user_group_id:
             user_khôlles.append(kholle)
     user_khôlles = sorted(user_khôlles, key=lambda x: day_to_num[x["jour"]])
@@ -288,27 +293,26 @@ async def calendar_cmd(interaction: discord.Integration):
             colle.location = kholle["salle"]
 
             #Calcul de la date de la colle
-            if semaine_collometre[kholle["semaine"]] < 33:
+            if semaine_collometre[kholle["semaine"]] > 33:
                 year = config["CurrentYear"]
             else :
                 year = config["CurrentYear"] + 1
-            year_start = datetime.datetime(year, 1, 1)
+            year_start = datetime.datetime(year, 1, 1, tzinfo=pytz.timezone('Europe/Paris'))
             #Premier jour de l'année + n° du jour de la colle - n° Jour de l'année + N° de la semaine de la colle -1 (on sait pas pourquoi -1, mais ça marche)
             date = year_start + datetime.timedelta(days=day_to_num[kholle["jour"]] - year_start.weekday(), weeks=semaine_collometre[kholle["semaine"]]-1) 
 
-            if "-" in kholle["heure"] :
-                start, end = kholle["heure"].split("-")
-                s_h, s_min = map(int, start.split("h"))
-                e_h, e_min = map(int, end.split("h"))
-                colle.begin = date + timedelta(hours=s_h, minutes=s_min)
-                colle.end = date + timedelta(hours=e_h, minutes=e_min)
-            else :
-                s_h, s_min = map(int, kholle["heure"].split("h"))
-                colle.begin = date + timedelta(hours=s_h, minutes=s_min)
-                colle.end = colle.begin + timedelta(minutes=55)
+            start, end = kholle["heure"].split("-")
+            s_h, s_min = map(int, start.split("h"))
+            e_h, e_min = map(int, end.split("h"))
+            colle.begin = date + timedelta(hours=s_h, minutes=s_min)
+            colle.end = date + timedelta(hours=e_h, minutes=e_min)
+
             calendrier.events.add(colle)
 
-    ics_content = str(calendrier)
+    buffer = io.BytesIO()
+    buffer.write(str(calendrier).encode("utf8"))
+    buffer.seek(0)
+    fichier_ics = discord.File(fp=buffer, filename=f"calendrier_{member["name"].split(" ")[1]}.txt")
 
     embed = discord.Embed(
         title="Ton Calendrier ICS",
@@ -317,13 +321,13 @@ async def calendar_cmd(interaction: discord.Integration):
     )
     embed.add_field(
         name="Fichier ICS",
-        value= "" #trouver comment mettre le ics dans un message
+        value="Voici ton calendrier",
         )
     embed.set_footer(text="MP2I >>>> MPSI")
     embed.set_thumbnail(
         url=url)
 
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.response.send_message(embed=embed, file=fichier_ics, ephemeral=True)
 
 class select_week(discord.ui.View):
 
