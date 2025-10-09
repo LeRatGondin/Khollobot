@@ -314,7 +314,7 @@ async def calendar_cmd(interaction: discord.Integration):
                 s_h, s_min = map(int, start.split("h"))
                 e_h, e_min = map(int, end.split("h"))
             else :
-                s_h, s_min = map(int, kholle.split("h"))
+                s_h, s_min = map(int, kholle["heure"].split("h"))
                 e_h, e_min = s_h + 1, s_min - 5
             colle.begin = date + timedelta(hours=s_h, minutes=s_min)
             colle.end = date + timedelta(hours=e_h, minutes=e_min)
