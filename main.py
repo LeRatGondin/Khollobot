@@ -383,9 +383,9 @@ class select_week(discord.ui.View):
 
 
 async def send_reminder_saturday():
-    # Send a remainder every saturday for next week khôlles
-    # if not (datetime.date.today().timetuple().tm_wday == 5):
-    #     return
+    #Send a remainder every saturday for next week khôlles
+    if not (datetime.date.today().timetuple().tm_wday == 5):
+        return
     for member in data["Members"]:
         if data["Members"][member]["reminder"] != "True":
             return
