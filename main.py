@@ -47,20 +47,25 @@ def semaine_S():
         if week > int(datetime.datetime(year, 12, 31).strftime('%W')):
             week = 1
 
+
 def semaine_actuelle() -> int:
-    """Fonction renvoyant le numéro de la semaine de travail, ou la prochaine il n'y a pas cours cette semaine
+    """Fonction renvoyant l'index de la semaine de travail (0-15), ou la prochaine s'il n'y a pas cours cette semaine
 
     >>> semaine_actuelle()
     3
     """
     if not semaine_collometre:
         semaine_S()
-    if not ((datetime.date.today().isocalendar()[1]) in semaine_collometre.values()):
-        # Alors get la semaine qui est sa bande superieure
-        next_school_week = [i for i in list(semaine_collometre.values()) if i > datetime.date.today().isocalendar()[1]][0]
-        return next_school_week
-
-    return list(semaine_collometre.values()).index(datetime.date.today().isocalendar()[1])
+    current_iso_week = datetime.date.today().isocalendar()[1]
+    for index, iso_week in semaine_collometre.items():
+        if iso_week == current_iso_week:
+            return index
+    # Alors get la semaine qui est sa bande superieure
+    future_weeks = [(index, iso_week) for index, iso_week in semaine_collometre.items() 
+                    if iso_week > current_iso_week]
+    if future_weeks:
+        return min(future_weeks, key=lambda x: x[1])[0]
+    return 0
 
 
 day_to_num = {
