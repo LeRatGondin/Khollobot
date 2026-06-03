@@ -155,7 +155,7 @@ def get_kholles():
                     'group_id': int(row[7]) if row[7].isdecimal() else int(row[7][:-1]),
                     'user_id' : -ord("a")+ord(row[7][-1:]) if not row[7].isdecimal() else None
                 }
-                if kholle_data['group_id'] == 0 :
+                if kholle_data['group_id'] == None :
                     continue
                 if len(row) > 9 and row[9]:
                     kholle_data['note'] = row[9]
