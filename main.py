@@ -377,15 +377,35 @@ async def calendar_cmd(interaction: discord.Interaction):
             #Premier jour de l'année + n° du jour de la colle - n° Jour de l'année + N° de la semaine de la colle -1 (on sait pas pourquoi -1, mais ça marche)
             date = year_start + datetime.timedelta(days=day_to_num[kholle["jour"]] - year_start.weekday(), weeks=kholle["semaine_iso"]-1) 
 
-            if "-" in kholle["heure"]:
-                start, end = kholle["heure"].split("-")
-                s_h, s_min = map(int, start.split("h"))
-                e_h, e_min = map(int, end.split("h"))
-            else :
-                s_h, s_min = map(int, kholle["heure"].split("h"))
-                e_h, e_min = s_h + 1, s_min - 5
-            colle.begin = date + timedelta(hours=s_h, minutes=s_min)
-            colle.end = date + timedelta(hours=e_h, minutes=e_min)
+            #Le système d'heure n'est jamais uniforme ; formes possibles = "12h15-13h10", "12h15 13h10", "12h15", "12h"
+            #On s'interesse donc juste à l'heure du début, à laquelle vient s'associer la minute de la sonnerie
+            #Les colles de français utiliseront un système différent
+
+            school_slots = {8:0, 9:0, 10:15, 11:15, 12:15, 13:15, 14:15, 15:15, 16:20, 17:20, 18:20} 
+            #Dictionnaire qui à chaque heure, associe la minute de sonnerie de début d'heure 
+            #(trouvable sur l'emploi du temps)
+            #C'est pas exacte non plus, soyez en avance !
+
+            if kholle["matiere"] != "Français" :
+                start_h = int(kholle["heure"][:2])
+                if start_h in school_slots.keys():
+                    start_min = school_slots[start_h]
+                else:
+                    start_min = 0
+                end_h, end_min = start_h + 1, start_min - 5 
+                #55 minutes par "créneaux de kholle"
+            
+            else:
+                if "-" in kholle["heure"]: #cas 1 forme "12h15-13h10" (1er semestre)
+                    start, end = kholle["heure"].split("-")
+                    start_h, start_min = map(int, start.split("h"))
+                    end_h, end_min = map(int, start.split("h"))
+                else: #cas 2 forme "12h15" (2eme semestre)
+                    start_h, start_min = map(int, kholle["heure"].split("h"))
+                    end_h, end_min = start_h + 0, start_min + 30
+            
+            colle.begin = date + timedelta(hours=start_h, minutes=start_min)
+            colle.end = date + timedelta(hours=end_h, minutes=end_min)
 
             calendrier.events.add(colle)
 
